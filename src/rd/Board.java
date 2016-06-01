@@ -22,7 +22,7 @@ import javax.swing.JPanel;
  */
 public class Board extends JPanel implements Runnable{
     
-    private int size = 8;
+    private int size = 50;
     private int free = size*size;
     private int id = 0;
     private int empty = size*size;
@@ -36,12 +36,14 @@ public class Board extends JPanel implements Runnable{
     private double q_critic = 4215840142323.42;
     private double q = 0.0;
     private double q_mean = 0.0;
+    private double delta_q = 0.0;
     /*---------------------------*/
     
     
 
     private Cell [][]tab = new Cell[size][size];
     private final Cell [][]temp = new Cell[size][size];
+    private final Cell [][]temp_r = new Cell[size][size];
     
     public Conditions cond;
         
@@ -57,6 +59,9 @@ public class Board extends JPanel implements Runnable{
                           
                 temp[i][j] = new Cell();
                 temp[i][j].setID(0);
+                
+                temp_r[i][j] = new Cell();
+                temp_r[i][j].setID(0);
             }
         }
              
@@ -238,8 +243,8 @@ public class Board extends JPanel implements Runnable{
                 }
                 Rectangle cell = new Rectangle(x + j*cellW,
                             y + i*cellH,
-                            cellW-1,
-                            cellH-1);
+                            cellW,
+                            cellH);
                 g2d.fill(cell);
             }
         }     
@@ -253,27 +258,30 @@ public class Board extends JPanel implements Runnable{
         {
             if(empty==0){
                 System.out.println("freeR "+free_r);
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException ex) {
-                    Logger.getLogger(Board.class.getName()).log(Level.SEVERE, null, ex);
-                }
-                
-                for(int i=0; i<size; i++){
-                    for(int j=0; j<size; j++){
-                        this.checkPosition(i, j);
-                        }
-                    }
-                
-                
+//                try {
+//                    Thread.sleep(2000);
+//                } catch (InterruptedException ex) {
+//                    Logger.getLogger(Board.class.getName()).log(Level.SEVERE, null, ex);
+//                }
                 System.out.println("t "+t);
-                //this.countDensity(t);
-                this.recrystallization(t);
-                repaint();
-                t+=0.001;
+                this.recrystallization2();
+                //repaint();
+                
+//                for(int i=0; i<size; i++){
+//                    for(int j=0; j<size; j++){
+//                        this.checkPosition(i, j);
+//                        }
+//                    }
+//                
+//                
+//                System.out.println("t "+t);
+//                //this.countDensity(t);
+//                this.recrystallization(t);
+//                repaint();
+//                t+=0.001;
             }
             else{
-                System.out.println("empty "+empty);
+                //System.out.println("empty "+empty);
                 if(cond.getStatus()==1){
                 this.action();
                  repaint();
@@ -284,7 +292,7 @@ public class Board extends JPanel implements Runnable{
                 repaint();
             }
             try{
-                Thread.sleep(1000);
+                Thread.sleep(100);
             }catch (Exception ex){
             }
         }
@@ -405,14 +413,9 @@ public class Board extends JPanel implements Runnable{
     }
     
     /*------------------------RECRYSTALLIZATION-----------*/
-    
-    public double countDensity(double time){
-        double density=A/B+(1-A/B) * Math.exp(-B*time);
-        //System.out.println("q "+q);
-        return density;
-    }
-    
-    public void checkPosition(int i, int j){
+
+    public void checkPosition(int i, int j){       //-----sprawdz pozycje komorki (granica/ srodek) TYLKO 1 RAZ
+        
         for(int k=i-1; k<i+2; k++){ //-----------------from 1 up to 1 low (3 iterations) in rows
             for(int l=j-1; l<j+2; l++){ //-------------from 1 up to 1 low (3 iterations) in columns
                 if((k==i && l==j) || k<0 || k>=size || l<0 || l>=size)
@@ -427,18 +430,179 @@ public class Board extends JPanel implements Runnable{
         }
     }
     
-    public double packages(boolean edge){
-        Random rand = new Random();
+    public double countDensity(double time){        // oblicz gęstość dyslokacji
+        double density=A/B+(1-A/B) * Math.exp(-B*time);
+        return density;
+    }
+    
+    public double packages(boolean edge){       
+        Random rand = new Random();             
         double pack = 0;
         
         if(edge){
-            pack = ((rand.nextInt(61)+120)/100)*q_mean;
+            pack = ((rand.nextInt(61)+120.0)/100.0)*q_mean;
         }else{
-            pack = (rand.nextInt(31)/100)*q_mean;
+            pack = (rand.nextInt(31)/100.0)*q_mean;
         }
         
         return pack;
     }
+    
+    public boolean firstRec(int m, int n){
+        boolean firstRec = false;
+        
+        if(!tab[m][n].isRecrystalized() && tab[m][n].getQ()>q_critic && tab[m][n].isOnEdge() ){
+            free_r--; //zmniejsz pzrestrzen
+            id++;
+            tab[m][n].setID(id);
+            tab[m][n].drawColor();
+            tab[m][n].recrastilezed();  
+            tab[m][n].setQ(0);
+            firstRec = true;
+            repaint();
+        }      
+        return firstRec;
+    }
+    
+    public void recrystallization2 (){
+        for(int i=0; i<size; i++){
+            for(int j=0; j<size; j++){
+                this.checkPosition(i, j);
+            }
+        }
+/*---------------------------------------------------------------------------*/         
+//                    q = this.countDensity(t);
+//            q_mean = q/free_r;
+//
+//            for(int i=0; i<size; i++){
+//                for(int j=0; j<size; j++){
+//                    tab[i][j].addDeltaQ(this.packages(tab[i][j].isOnEdge()));
+//                }
+//            }
+/*---------------------------------------------------------------------------*/               
+        boolean f = false;
+        while(!f){
+            q = this.countDensity(t);
+            q_mean = q/free_r;
+
+            for(int i=0; i<size; i++){
+                for(int j=0; j<size; j++){
+                    tab[i][j].addDeltaQ(this.packages(tab[i][j].isOnEdge()));
+                }
+            }
+            
+            for(int i=0; i<size; i++){
+                for(int j=0; j<size; j++){
+                    if(firstRec(i, j)){
+                        f=true;
+                    }
+                }
+            }
+//*---------------------------------------------------------------------------*/            
+//            delta_q = this.countDensity(t)-this.countDensity(t-1);
+//            for(int i=0; i<size; i++){
+//                for(int j=0; j<size; j++){
+//                    tab[i][j].addDeltaQ(delta_q);
+//                }
+//            }
+/*---------------------------------------------------------------------------*/            
+            t+=0.001;
+            System.out.println("t "+t);
+        }
+        
+        System.out.println("-------------------------------------------");
+        
+        while(free_r>0){
+            q = this.countDensity(t);
+            q_mean = q/free_r;
+            
+            for(int i=0; i<size; i++){
+                for(int j=0; j<size; j++){
+                    tab[i][j].addDeltaQ(this.packages(tab[i][j].isOnEdge()));
+                }
+            }
+/*---------------------------------------------------------------------------*/            
+//            delta_q = this.countDensity(t)-this.countDensity(t-1);
+//            for(int i=0; i<size; i++){
+//                for(int j=0; j<size; j++){
+//                    tab[i][j].addDeltaQ(delta_q);
+//                }
+//            }
+/*---------------------------------------------------------------------------*/            
+            boolean [][]av = new boolean[size][size];
+            
+            
+            for(int i=0; i<size; i++){
+                for(int j=0; j<size; j++){
+                    av[i][j]=false;
+                    if(!tab[i][j].isRecrystalized()){
+                        System.out.println(i+" "+j+" "+this.canRecrystalize(i, j));
+                        av[i][j]=this.canRecrystalize(i, j);
+                    }
+                }
+            }
+            
+            for(int i=0; i<size; i++){
+                for(int j=0; j<size; j++){
+                    if(av[i][j]){
+                        tab[i][j].setID(temp_r[i][j].getID());
+                        tab[i][j].setColor(temp_r[i][j].getColor());
+                        tab[i][j].recrastilezed();
+                        tab[i][j].setQ(0);
+                        
+                        free_r--;
+                        
+                        temp_r[i][j].setID(0);
+                        temp_r[i][j].resetColor();
+                        av[i][j]=false;
+                        repaint();
+                    }
+                    else
+                        firstRec(i,j);
+                }
+            }
+            t+=0.001;
+            System.out.println("t "+t);
+            //free_r=0;
+        }
+    }
+    
+    
+
+    
+    public boolean canRecrystalize(int i, int j){      //sprawdzanie czy sąsiad zrekrystalizował i czy gęstość dyslokacji w sąsiednich komorkach jest mniejsza
+        double sum_q = 0.0;
+        boolean can_r = false;
+        for(int k=i-1; k<i+2; k++){ //-----------------from 1 up to 1 low (3 iterations) in rows
+            for(int l=j-1; l<j+2; l++){ //-------------from 1 up to 1 low (3 iterations) in columns
+                if((k==i && l==j) || k<0 || k>=size || l<0 || l>=size)
+                    ;//System.out.println("go ");
+                else{
+                    sum_q += tab[k][l].getQ();
+                    if(tab[k][l].isRecrystalized()){
+                     can_r = true;
+                     temp_r[i][j].setID(tab[k][l].getID());
+                     temp_r[i][j].setColor(tab[k][l].getColor());
+                    }                   
+                }
+            }
+        }
+        return can_r && sum_q>tab[i][j].getQ();//            tab[i][j].setID(temp_r[i][j].getID());
+//            tab[i][j].setColor(temp_r[i][j].getColor());
+//            //tab[i][j].cleanNBHD();
+//            
+//            //tab[i][j].drawColor();
+//            tab[i][j].recrastilezed();
+//            tab[i][j].setQ(0);
+//            
+//            free_r--;
+//    
+//            temp_r[i][j].setID(0);
+//            temp_r[i][j].resetColor();
+        //return can_r;
+    }
+    
+
     
     public void recrystallization(double time){
         q = this.countDensity(time) - this.countDensity(time-1);
@@ -456,20 +620,69 @@ public class Board extends JPanel implements Runnable{
 //                System.out.println("q cri "+q_critic);
             }
         }
-        
         for(int m=0; m<size; m++){
             for(int n=0; n<size; n++){
-                if(tab[m][n].getQ()>q_critic && tab[m][n].isOnEdge() && !tab[m][n].isRecrystalized()){
-                    //rekrystalizuj
-                    free_r--; //zmniejsz pzrestrzen
-                    id++;
-                    tab[m][n].setID(id);
-                    tab[m][n].drawColor();
-                    tab[m][n].recrastilezed();
-                    tab[m][n].setQ(0);                   
+                if(!tab[m][n].isRecrystalized()){
+                    if(this.canRecrystalize(m, n)){
+                        System.out.println(m+" "+n+" "+this.canRecrystalize(m, n));
+//                        tab[m][n].setID(temp_r[m][n].getID());
+//            tab[m][n].setColor(temp_r[m][n].getColor());
+            //tab[i][j].cleanNBHD();
+            
+            //tab[i][j].drawColor();
+            
+                temp_r[m][n].setID(tab[m][n].getID());
+                temp_r[m][n].setColor(tab[m][n].getColor());
+            
+            tab[m][n].recrastilezed();
+            tab[m][n].setQ(0);
+            
+            free_r--;
+    
+            temp_r[m][n].setID(0);
+            temp_r[m][n].resetColor();
+                    }
+                    
                 }
             }
         }
+        
+        for(int m=0; m<size; m++){
+            for(int n=0; n<size; n++){
+                if(!tab[m][n].isRecrystalized()){
+                    if(tab[m][n].getQ()>q_critic && tab[m][n].isOnEdge()){
+                        System.out.println(m+" "+n+" "+"rekrystalizuj");
+                    //rekrystalizuj
+                    free_r--; //zmniejsz pzrestrzen
+                    id++;
+                    temp_r[m][n].setID(id);
+                    temp_r[m][n].drawColor();
+                    temp_r[m][n].recrastilezed();
+                    //temp_r[m][n].setQ(0);                   
+                    }
+
+                }
+                
+            }
+        }
+        
+        for(int i=0; i<size; i++){
+            for(int j=0; j<size; j++){
+                        if(!tab[i][j].isRecrystalized() && temp_r[i][j].isRecrystalized()){
+                            tab[i][j].setID(temp_r[i][j].getID());
+                            tab[i][j].setColor(temp_r[i][j].getColor());
+                            tab[i][j].recrastilezed();
+                            tab[i][j].setQ(0);
+                            //tab[i][j].cleanNBHD();
+                            temp_r[i][j].setID(0);
+                            temp_r[i][j].resetColor();
+                            
+                            
+                            
+                        }
+            }
+        }
+        
     }
     
 }
